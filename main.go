@@ -20,12 +20,13 @@ const (
 )
 
 var (
-	authToken      string
-	team           string
-	apiURL         string
-	annotations    string
-	sensuDashboard string
-	stdin          *os.File
+	authToken          string
+	team               string
+	apiURL             string
+	annotations        string
+	sensuDashboard     string
+	duplicateIncidents bool
+	stdin              *os.File
 )
 
 func main() {
@@ -77,6 +78,11 @@ func configureRootCommand() *cobra.Command {
 		"sensuDashboard",
 		os.Getenv("OPSGENIE_SENSU_DASHBOARD"),
 		"The OpsGenie Handler will use it to create a source Sensu Dashboard URL. Use OPSGENIE_SENSU_DASHBOARD. Example: http://sensu-dashboard.example.local/c/~/n")
+
+	cmd.Flags().BoolVar(&duplicateIncidents,
+		"duplicateIncidents",
+		false,
+		"When true, the handler will create an incident for each non-OK event, relying on OpsGenie service to deduplicate alerts")
 
 	return cmd
 }
@@ -257,7 +263,12 @@ func run(cmd *cobra.Command, args []string) error {
 		return closeAlert(alertCli, event, hasAlert)
 	}
 	if event.Check.Status != 0 {
-		return addNote(alertCli, event, hasAlert)
+		if duplicateIncidents {
+			return createIncident(alertCli, event)
+		} else {
+			return addNote(alertCli, event, hasAlert)
+		}
+
 	}
 	return nil
 }
